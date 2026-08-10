@@ -125,7 +125,3 @@ jobs:
           labels: ${{ steps.meta-proxy.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Run API tests
-        uses: ./.github/workflows/api-tests.yml
-        with: {}
