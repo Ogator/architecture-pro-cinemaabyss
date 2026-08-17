@@ -1,0 +1,61 @@
+# Лимиты намеренно занижены (1 соединение / 1 pending-запрос), чтобы circuit breaker
+# гарантированно срабатывал при нагрузке fortio с -c 50: лишние запросы получают 503
+# с флагом UO (upstream overflow), счётчик upstream_rq_pending_overflow растёт.
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: movies-service-circuit-breaker
+  namespace: cinemaabyss
+spec:
+  host: movies-service.cinemaabyss.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        # Максимум одно TCP-соединение к upstream
+        maxConnections: 1
+        connectTimeout: 1s
+        tcpKeepalive:
+          time: 7200s
+          interval: 75s
+      http:
+        # Не более 1 запроса в очереди ожидания и 1 запроса на соединение
+        http1MaxPendingRequests: 1
+        http2MaxRequests: 1
+        maxRequestsPerConnection: 1
+        maxRetries: 0
+        idleTimeout: 10s
+    outlierDetection:
+      # Выкидываем эндпоинт из пула после 1 ошибки 5xx
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 100
+      minHealthPercent: 0
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: monolith-circuit-breaker
+  namespace: cinemaabyss
+spec:
+  host: monolith.cinemaabyss.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 1
+        connectTimeout: 1s
+        tcpKeepalive:
+          time: 7200s
+          interval: 75s
+      http:
+        http1MaxPendingRequests: 1
+        http2MaxRequests: 1
+        maxRequestsPerConnection: 1
+        maxRetries: 0
+        idleTimeout: 10s
+    outlierDetection:
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 100
+      minHealthPercent: 0
