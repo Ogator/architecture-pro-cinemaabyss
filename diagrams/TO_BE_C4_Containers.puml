@@ -1,0 +1,70 @@
+@startuml
+!include <C4/C4_Container>
+
+title КиноБездна — To-Be архитектура, C4 уровень Containers
+
+LAYOUT_TOP_DOWN()
+
+Person(user, "Пользователь", "Смотрит фильмы с ноутбука, смарт-ТВ, мобильного устройства")
+
+System_Ext(payment_gw, "Платёжная система", "Внешний платёжный провайдер")
+System_Ext(partners, "Онлайн-кинотеатры", "Партнёры — поставщики контента и метаданных")
+System_Ext(recsys, "Внешняя рекомендательная система", "Считает персональные рекомендации")
+
+System_Boundary(cinema, "КиноБездна") {
+
+  Container(gateway, "API Gateway (proxy-service)", "TypeScript, Node.js, NestJS","Единая точка входа и вызова сервисов: TLS, аутентификация запросов, маршрутизация")
+
+  Container(movies, "Movies Service", "Go", "Домен «Каталог»: метаданные фильмов, жанры, рейтинги")
+  Container(users, "Users Service", "Go", "Домен «Пользователи»: профили, регистрация, аутентификация, JWT")
+  Container(payments, "Payments Service", "Go", "Домен «Платежи»: приём платежей, интеграция с платёжным провайдером")
+  Container(subs, "Subscriptions Service", "Go", "Домен «Подписки»: планы, продление, статус доступа")
+  Container(streaming, "Streaming Service", "Go", "Домен «Контент»: выдача манифестов и ссылок на видео, учёт просмотров")
+  Container(recadapter, "Recommendations Adapter", "Go", "Домен «Рекомендации»: антикоррупционный слой к внешней рекомендательной системе")
+  Container(events, "Events Service", "TypeScript, Node.js, NestJS","Шина доменных событий: producer/consumer движения, user/payment/movie events")
+
+  ContainerQueue(kafka, "Kafka", "Apache Kafka", "Топики movie-events, user-events, payment-events — асинхронная интеграция доменов")
+
+  ContainerDb(movies_db, "Movies DB", "PostgreSQL", "movies, genres, ratings")
+  ContainerDb(users_db, "Users DB", "PostgreSQL", "users")
+  ContainerDb(pay_db, "Payments DB", "PostgreSQL", "payments")
+  ContainerDb(subs_db, "Subscriptions DB", "PostgreSQL", "subscriptions")
+  ContainerDb(views_db, "Views DB", "PostgreSQL", "views, история просмотров")
+  ContainerDb(rec_store, "Recommendations Store", "Redis / PostgreSQL", "Предрассчитанные рекомендации по пользователям (user_id, movie_id, score, calculated_at), TTL")
+  ContainerDb(s3, "Объектное хранилище", "S3", "Видеофайлы, постеры, превью")
+}
+
+Rel(user, gateway, "Вызывает API с ноутбука, смарт-ТВ, мобильного устройства", "HTTPS/JSON")
+
+Rel(gateway, movies, "/api/movies", "HTTP/JSON")
+Rel(gateway, users, "/api/users", "HTTP/JSON")
+Rel(gateway, payments, "/api/payments", "HTTP/JSON")
+Rel(gateway, subs, "/api/subscriptions", "HTTP/JSON")
+Rel(gateway, streaming, "/api/stream", "HTTP/JSON")
+Rel(gateway, recadapter, "/api/recommendations — синхронное чтение read-модели", "HTTP/JSON")
+Rel(gateway, events, "/api/events", "HTTP/JSON")
+
+Rel(movies, movies_db, "Читает/пишет", "SQL")
+Rel(users, users_db, "Читает/пишет", "SQL")
+Rel(payments, pay_db, "Читает/пишет", "SQL")
+Rel(subs, subs_db, "Читает/пишет", "SQL")
+Rel(streaming, views_db, "Читает/пишет", "SQL")
+Rel(streaming, s3, "Отдаёт ссылки на контент", "S3 API")
+
+Rel(users, kafka, "user-events", "Kafka")
+Rel(payments, kafka, "payment-events", "Kafka")
+Rel(movies, kafka, "movie-events", "Kafka")
+Rel(streaming, kafka, "view-events", "Kafka")
+Rel(subs, kafka, "subscription-events", "Kafka")
+Rel(events, kafka, "Публикует и читает события", "Kafka")
+Rel(recadapter, kafka, "Читает view-events и user-events", "Kafka")
+Rel(recadapter, rec_store, "Читает при запросе, обновляет из ответов рек. системы", "SQL / Redis")
+Rel(recadapter, movies, "Fallback: топ и тренды при промахе кэша", "HTTP/JSON")
+
+Rel(payments, payment_gw, "Проводит платежи", "HTTPS")
+Rel(movies, partners, "Импортирует метаданные и контент", "HTTPS")
+Rel(recadapter, recsys, "Отправляет фидбек о просмотрах и оценках", "AMQP")
+Rel(recsys, recadapter, "Возвращает рассчитанные рекомендации", "AMQP")
+
+SHOW_LEGEND()
+@enduml

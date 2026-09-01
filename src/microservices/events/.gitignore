@@ -1,0 +1,17 @@
+# Зависимости
+node_modules/
+
+# Сборка
+dist/
+*.tsbuildinfo
+
+# Тесты
+coverage/
+
+# Логи
+*.log
+npm-debug.log*
+
+# Окружение
+.env
+.env.local
